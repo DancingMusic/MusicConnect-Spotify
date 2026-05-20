@@ -31,6 +31,9 @@ import type {
   MusicSearchResult,
   MusicStreamInfo,
   MusicTrack,
+  MusicPlaylist,
+  MusicPlaylistList,
+  MusicPlaylistQuery,
 } from "@dancingmusic/music-store";
 
 export interface SpotifyConfig {
@@ -56,7 +59,38 @@ interface SpotifySearchResponse {
   };
 }
 
+interface SpotifyPlaylist {
+  id: string;
+  name: string;
+  description?: string;
+  images?: Array<{ url: string }>;
+  tracks?: { total?: number };
+  owner?: { display_name?: string };
+  external_urls?: { spotify?: string };
+}
+
+interface SpotifyPlaylistResponse {
+  playlists?: { items?: SpotifyPlaylist[]; total?: number };
+}
+
+interface SpotifyPlaylistTracksResponse {
+  items?: Array<{ track: SpotifyTrack | null }>;
+  total?: number;
+}
+
 const API = "https://api.spotify.com/v1";
+
+function toPlaylist(p: SpotifyPlaylist): MusicPlaylist {
+  return {
+    id: `spotify-playlist:${p.id}`,
+    name: p.name,
+    description: p.description,
+    coverUrl: p.images?.[0]?.url,
+    trackCount: p.tracks?.total,
+    curator: p.owner?.display_name,
+    externalUrl: p.external_urls?.spotify,
+  };
+}
 
 function toTrack(t: SpotifyTrack): MusicTrack {
   return {
@@ -79,8 +113,8 @@ export class SpotifyConnector implements MusicConnector {
     id: "spotify",
     name: "Spotify",
     description: "Spotify Web API — search + 30s previews",
-    version: "0.2.0",
-    capabilities: ["search", "stream"],
+    version: "0.3.0",
+    capabilities: ["search", "stream", "playlist"],
     configSchema: [
       {
         key: "accessToken",
@@ -179,10 +213,57 @@ export class SpotifyConnector implements MusicConnector {
     return { url: t.preview_url, format: "mp3" };
   }
 
+  async listPlaylists(query: MusicPlaylistQuery = {}): Promise<MusicPlaylistList> {
+    const page = query.page ?? 1;
+    const pageSize = Math.min(query.pageSize ?? 30, 50);
+    const offset = (page - 1) * pageSize;
+    // category = a Spotify category id like "toplists" / "pop" / "rock"
+    // omitting → use featured-playlists (global editorial picks)
+    const url = query.category
+      ? `${API}/browse/categories/${encodeURIComponent(query.category)}/playlists?limit=${pageSize}&offset=${offset}`
+      : `${API}/browse/featured-playlists?limit=${pageSize}&offset=${offset}`;
+    const res = await this.authFetch(url);
+    if (!res.ok) throw new Error(`Spotify playlist fetch failed: ${res.status}`);
+    const data = (await res.json()) as SpotifyPlaylistResponse;
+    const items = data.playlists?.items ?? [];
+    return {
+      playlists: items.map(toPlaylist),
+      total: data.playlists?.total ?? items.length,
+      page,
+      pageSize,
+    };
+  }
+
+  async getPlaylistTracks(
+    playlistId: string,
+    opts: { page?: number; pageSize?: number } = {},
+  ): Promise<MusicSearchResult> {
+    const id = this.parsePlaylistId(playlistId);
+    const page = opts.page ?? 1;
+    const pageSize = Math.min(opts.pageSize ?? 30, 100);
+    if (!id) return { tracks: [], total: 0, page, pageSize };
+    const offset = (page - 1) * pageSize;
+    const res = await this.authFetch(`${API}/playlists/${id}/tracks?limit=${pageSize}&offset=${offset}`);
+    if (!res.ok) return { tracks: [], total: 0, page, pageSize };
+    const data = (await res.json()) as SpotifyPlaylistTracksResponse;
+    const items = (data.items ?? []).map(i => i.track).filter((t): t is SpotifyTrack => !!t);
+    return {
+      tracks: items.map(toTrack),
+      total: data.total ?? items.length,
+      page,
+      pageSize,
+    };
+  }
+
   private parseId(trackId: string): string | null {
     if (trackId.startsWith("spotify:track:")) return trackId.slice("spotify:track:".length);
     if (trackId.startsWith("spotify:")) return trackId.slice("spotify:".length);
     return trackId || null;
+  }
+
+  private parsePlaylistId(id: string): string | null {
+    if (id.startsWith("spotify-playlist:")) return id.slice("spotify-playlist:".length);
+    return id || null;
   }
 }
 
