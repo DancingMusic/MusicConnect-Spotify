@@ -79,8 +79,26 @@ export class SpotifyConnector implements MusicConnector {
     id: "spotify",
     name: "Spotify",
     description: "Spotify Web API — search + 30s previews",
-    version: "0.1.0",
+    version: "0.2.0",
     capabilities: ["search", "stream"],
+    configSchema: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        type: "password",
+        required: false,
+        placeholder: "BQA...",
+        help: "Spotify Bearer token (~1h lifetime). 用 client_credentials 换取，或留空改用下方 tokenUrl。",
+      },
+      {
+        key: "tokenUrl",
+        label: "Token 端点 (推荐)",
+        type: "url",
+        required: false,
+        placeholder: "https://your-backend.example.com/spotify-token",
+        help: "返回 { access_token, expires_in } 的后端代理。连接器会按需自动刷新。任一字段必填。",
+      },
+    ],
   };
 
   private config: SpotifyConfig = {};

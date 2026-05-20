@@ -21,8 +21,26 @@ var SpotifyConnector = class {
       id: "spotify",
       name: "Spotify",
       description: "Spotify Web API \u2014 search + 30s previews",
-      version: "0.1.0",
-      capabilities: ["search", "stream"]
+      version: "0.2.0",
+      capabilities: ["search", "stream"],
+      configSchema: [
+        {
+          key: "accessToken",
+          label: "Access Token",
+          type: "password",
+          required: false,
+          placeholder: "BQA...",
+          help: "Spotify Bearer token (~1h lifetime). \u7528 client_credentials \u6362\u53D6\uFF0C\u6216\u7559\u7A7A\u6539\u7528\u4E0B\u65B9 tokenUrl\u3002"
+        },
+        {
+          key: "tokenUrl",
+          label: "Token \u7AEF\u70B9 (\u63A8\u8350)",
+          type: "url",
+          required: false,
+          placeholder: "https://your-backend.example.com/spotify-token",
+          help: "\u8FD4\u56DE { access_token, expires_in } \u7684\u540E\u7AEF\u4EE3\u7406\u3002\u8FDE\u63A5\u5668\u4F1A\u6309\u9700\u81EA\u52A8\u5237\u65B0\u3002\u4EFB\u4E00\u5B57\u6BB5\u5FC5\u586B\u3002"
+        }
+      ]
     };
     this.config = {};
     this.cachedToken = null;
