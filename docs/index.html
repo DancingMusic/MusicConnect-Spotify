@@ -9,9 +9,9 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
       background: #0a0a0a; color: #e4e4e4;
-      margin: 0; padding: 2rem 1.25rem 6rem;
-      max-width: 1000px; margin-left: auto; margin-right: auto;
+      margin: 0; padding: 2rem 1rem 8rem;
     }
+    .wrap { max-width: 1400px; margin: 0 auto; }
     h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
     p.desc { color: #888; margin: 0 0 1rem; }
     .meta { font-size: 12px; color: #666; margin-bottom: 1.25rem; }
@@ -24,16 +24,23 @@
       outline: none;
     }
     input[type=search]:focus { border-color: #5a5a5a; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 13px; }
-    th, td { padding: .5rem .6rem; text-align: left; border-bottom: 1px solid #1a1a1a; }
-    th { color: #777; font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+    .table-scroll { overflow-x: auto; margin-top: 1rem; border: 1px solid #1a1a1a; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1100px; }
+    th, td { padding: .45rem .55rem; text-align: left; border-bottom: 1px solid #1a1a1a; white-space: nowrap; }
+    th { color: #777; font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; background: #0f0f0f; position: sticky; top: 0; }
     tbody tr { transition: background .12s; }
     tbody tr:hover { background: #141414; }
     td.num { color: #555; width: 32px; }
+    td.id, td.cover, td.createdAt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8aa3c5; font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
     td.title { color: #fff; }
     td.artist, td.album { color: #888; }
-    td.dur { color: #666; text-align: right; font-variant-numeric: tabular-nums; width: 60px; }
-    td.act { text-align: right; width: 60px; }
+    td.dur { color: #666; text-align: right; font-variant-numeric: tabular-nums; }
+    td.price { color: #b5d488; font-variant-numeric: tabular-nums; }
+    td.currency { color: #aaa; }
+    td.version { color: #777; }
+    td.act { text-align: right; }
+    a.link { color: #7aa3ff; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
     .play-btn {
       background: transparent; border: 1px solid #333; color: #ccc;
       padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
@@ -47,41 +54,71 @@
       background: #111; border-top: 1px solid #222;
       padding: .5rem 1rem;
     }
-    .footer audio { width: 100%; max-width: 900px; margin: 0 auto; display: block; }
-    .now { font-size: 12px; color: #888; text-align: center; margin-bottom: .25rem; }
+    .footer audio { width: 100%; max-width: 1200px; margin: 0 auto; display: block; }
+    .now { font-size: 12px; color: #888; text-align: center; margin-bottom: .25rem; max-width: 1200px; margin-left: auto; margin-right: auto; }
+    .stream-info { font-family: ui-monospace, monospace; font-size: 11px; color: #6a8aa8; text-align: center; margin-top: .25rem; word-break: break-all; max-width: 1200px; margin-left: auto; margin-right: auto; }
+    details.fields-help { margin-top: 1rem; font-size: 12px; color: #888; }
+    details.fields-help summary { cursor: pointer; user-select: none; }
+    details.fields-help code { color: #b5d488; }
   </style>
 </head>
 <body>
-  <h1>Spotify</h1>
-  <p class="desc">Spotify Web API — 搜索 + 30 秒预览</p>
-  <p class="meta">
-    数据源仓库: <code>DancingMusic/MusicConnect-Spotify</code> ·
-    版本: <code id="version">loading…</code> ·
-    ID 前缀: <code>spotify:</code> ·
-    <a href="https://github.com/DancingMusic/MusicConnect-Spotify" style="color:#7aa3ff">GitHub →</a>
-  </p>
+  <div class="wrap">
+    <h1>Spotify</h1>
+    <p class="desc">Spotify Web API — 搜索 + 30 秒预览</p>
+    <p class="meta">
+      数据源仓库: <code>DancingMusic/MusicConnect-Spotify</code> ·
+      版本: <code id="version">loading…</code> ·
+      ID 前缀: <code>spotify:</code> ·
+      Bundle: <code><a class="link" href="https://cdn.jsdelivr.net/gh/DancingMusic/MusicConnect-Spotify@main/dist/index.js" target="_blank">jsdelivr@main</a></code> ·
+      <a class="link" href="https://github.com/DancingMusic/MusicConnect-Spotify" target="_blank">GitHub →</a>
+    </p>
 
-  <div class="config-note">⚠️ 本连接器需要 <code>accessToken</code> 或 <code>tokenUrl</code> 才能搜索。本演示页未配置，搜索会失败。<br>在 DancingMusic 中添加时填写你的 Spotify token 端点。</div>
+    <div class="config-note">⚠️ 本连接器需要 <code>accessToken</code> 或 <code>tokenUrl</code> 才能搜索。本演示页未配置，搜索会失败。<br>在 DancingMusic 中添加时填写你的 Spotify token 端点。</div>
 
-  <input id="q" type="search" placeholder="搜索..." value="Imagine Dragons" autofocus>
+    <input id="q" type="search" placeholder="搜索..." value="Imagine Dragons" autofocus>
 
-  <div id="status" class="status">加载中…</div>
+    <div id="status" class="status">加载中…</div>
 
-  <table>
-    <thead>
-      <tr><th class="num">#</th><th>标题</th><th>艺人</th><th>专辑</th><th class="dur">时长</th><th></th></tr>
-    </thead>
-    <tbody id="rows"></tbody>
-  </table>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>id</th>
+            <th>title</th>
+            <th>artist</th>
+            <th>album</th>
+            <th>coverUrl</th>
+            <th class="dur">durationSec</th>
+            <th class="price">price</th>
+            <th>currency</th>
+            <th>version</th>
+            <th>createdAt</th>
+            <th>updatedAt</th>
+            <th class="act">action</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <details class="fields-help">
+      <summary>关于这些字段</summary>
+      <p>所有列直接对应 <code>MusicTrack</code> 接口（<code>@dancingmusic/music-store</code>）。<code>coverUrl</code> 只展示链接以节约带宽；<code>price</code>/<code>currency</code>/<code>version</code>/<code>createdAt</code>/<code>updatedAt</code> 由连接器实现自填，含义因数据源而异（多数公开 API 不返回价格信息所以是 0/默认值）。点击 ▶ 会调用 <code>getStreamUrl(id)</code> 并把返回的 URL 显示在底部播放器条上方。</p>
+    </details>
+  </div>
 
   <div class="footer">
     <div class="now" id="nowPlaying">未播放</div>
+    <div class="stream-info" id="streamInfo"></div>
     <audio id="player" controls></audio>
   </div>
 
   <script type="module">
-    // The page loads the same dist/index.js that the host app uses, so what
-    // you see here is exactly what users will see in DancingMusic.
+    // Loaded from the same jsdelivr URL that DancingMusic uses, so this demo
+    // exercises the exact bundle users will get. Relative `../dist/index.js`
+    // wouldn't work because GitHub Pages only publishes /docs.
     import Connector from 'https://cdn.jsdelivr.net/gh/DancingMusic/MusicConnect-Spotify@main/dist/index.js';
 
     const DEFAULT_CONFIG = {};
@@ -92,6 +129,7 @@
     const rowsEl = $('#rows');
     const player = $('#player');
     const now = $('#nowPlaying');
+    const streamInfo = $('#streamInfo');
 
     let connector;
     try {
@@ -105,9 +143,16 @@
     }
 
     function fmt(s) {
-      if (!s) return '';
+      if (!s) return '0';
       const m = Math.floor(s / 60), r = s % 60;
       return `${m}:${String(r).padStart(2, '0')}`;
+    }
+    function trunc(s, n) {
+      if (!s) return '';
+      return s.length > n ? s.slice(0, n) + '…' : s;
+    }
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
     let activeRow = null;
@@ -116,16 +161,24 @@
       row.querySelector('.play-btn').classList.add('playing');
       activeRow = row;
       now.textContent = `${track.title} — ${track.artist || ''}`;
-      let url = null;
-      try {
-        const info = await connector.getStreamUrl(track.id);
-        if (info?.url) url = info.url;
-      } catch (e) { /* try fallback */ }
-      if (!url && FALLBACK) url = FALLBACK(track.id);
+      streamInfo.textContent = '解析中…';
+      let info = null;
+      try { info = await connector.getStreamUrl(track.id); } catch (_) {}
+      let url = info?.url || null;
+      let source = info ? 'connector' : null;
+      if (!url && FALLBACK) {
+        url = FALLBACK(track.id);
+        if (url) source = 'fallback';
+      }
       if (!url) {
-        now.textContent = `${track.title} — 无可用流（VIP / 需登录）`;
+        streamInfo.textContent = `❌ getStreamUrl(${track.id}) 返回 null（VIP / 需登录 / 无可用流）`;
         return;
       }
+      const parts = [`▶ ${source}`, url];
+      if (info?.format) parts.push(`format=${info.format}`);
+      if (info?.bitrate) parts.push(`bitrate=${info.bitrate}`);
+      if (info?.expiresAt) parts.push(`expiresAt=${new Date(info.expiresAt).toISOString()}`);
+      streamInfo.textContent = parts.join(' · ');
       player.src = url;
       try { await player.play(); } catch (_) { /* user gesture rules */ }
     }
@@ -138,21 +191,30 @@
         rowsEl.innerHTML = '';
         r.tracks.forEach((t, i) => {
           const tr = document.createElement('tr');
+          const coverCell = t.coverUrl
+            ? `<a class="link" href="${esc(t.coverUrl)}" target="_blank" title="${esc(t.coverUrl)}">${esc(trunc(t.coverUrl, 36))}</a>`
+            : '<span style="color:#444">—</span>';
+          const createdCell = t.createdAt ? esc(trunc(t.createdAt, 20)) : '<span style="color:#444">—</span>';
+          const updatedCell = t.updatedAt ? esc(trunc(t.updatedAt, 20)) : '<span style="color:#444">—</span>';
           tr.innerHTML = `
             <td class="num">${i + 1}</td>
-            <td class="title"></td>
-            <td class="artist"></td>
-            <td class="album"></td>
-            <td class="dur">${fmt(t.durationSec)}</td>
-            <td class="act"><button class="play-btn">▶</button></td>
+            <td class="id" title="${esc(t.id)}">${esc(t.id)}</td>
+            <td class="title">${esc(t.title)}</td>
+            <td class="artist">${esc(t.artist || '')}</td>
+            <td class="album">${esc(t.album || '')}</td>
+            <td class="cover">${coverCell}</td>
+            <td class="dur">${esc(t.durationSec ?? 0)} <span style="color:#444">(${fmt(t.durationSec)})</span></td>
+            <td class="price">${esc(t.price ?? 0)}</td>
+            <td class="currency">${esc(t.currency || '')}</td>
+            <td class="version">${esc(t.version || '')}</td>
+            <td class="createdAt">${createdCell}</td>
+            <td class="createdAt">${updatedCell}</td>
+            <td class="act"><button class="play-btn">▶ play</button></td>
           `;
-          tr.querySelector('.title').textContent = t.title;
-          tr.querySelector('.artist').textContent = t.artist || '';
-          tr.querySelector('.album').textContent = t.album || '';
           tr.querySelector('.play-btn').addEventListener('click', () => play(t, tr));
           rowsEl.appendChild(tr);
         });
-        status.textContent = `共 ${r.tracks.length} 条结果（总计 ${r.total}）`;
+        status.textContent = `共 ${r.tracks.length} 条结果（总计 ${r.total}）— 滚动表格可看全部字段`;
       } catch (err) {
         rowsEl.innerHTML = '';
         status.textContent = '搜索失败: ' + err.message;
