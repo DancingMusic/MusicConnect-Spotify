@@ -157,6 +157,19 @@
     </div>
 
     <div id="viewPlaylists" style="display:none;">
+      <div class="pager">
+        <label>排序:
+          <select id="playlistSort" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;border-radius:4px;padding:3px 6px;font-size:12px;">
+            <option value="hot">热门 (hot)</option>
+            <option value="new">最新 (new)</option>
+            <option value="trending">趋势 (trending)</option>
+          </select>
+        </label>
+        <button id="playlistPrev" disabled>← 上一页</button>
+        <span class="info">第 <input id="playlistPageInput" type="number" min="1" value="1"> / <span id="playlistTotalPages">1</span> 页</span>
+        <button id="playlistNext" disabled>下一页 →</button>
+        <span class="info">每页 24 · 总计 <span id="playlistTotalCount">0</span></span>
+      </div>
       <div id="playlistStatus" class="status">加载歌单…</div>
       <div id="playlistGrid" class="playlist-grid"></div>
     </div>
@@ -330,6 +343,21 @@
 
     // -------- Playlists view --------
 
+    const PLAYLIST_PAGE_SIZE = 24;
+    let playlistPage = 1;
+    let playlistTotal = 0;
+    let playlistSort = 'hot';
+
+    function updatePlaylistPager() {
+      const totalPages = Math.max(1, Math.ceil(playlistTotal / PLAYLIST_PAGE_SIZE));
+      $('#playlistTotalPages').textContent = totalPages;
+      $('#playlistTotalCount').textContent = playlistTotal;
+      $('#playlistPageInput').value = playlistPage;
+      $('#playlistPageInput').max = totalPages;
+      $('#playlistPrev').disabled = playlistPage <= 1;
+      $('#playlistNext').disabled = playlistPage >= totalPages;
+    }
+
     async function renderPlaylists() {
       const grid = $('#playlistGrid');
       const ps = $('#playlistStatus');
@@ -339,15 +367,21 @@
         ps.classList.add('err');
         return;
       }
-      ps.textContent = '加载歌单…';
+      ps.textContent = `加载歌单（page ${playlistPage}, sort=${playlistSort}）…`;
       ps.classList.remove('err');
       try {
-        const r = await connector.listPlaylists();
+        const r = await connector.listPlaylists({
+          page: playlistPage,
+          pageSize: PLAYLIST_PAGE_SIZE,
+          sort: playlistSort,
+        });
+        playlistTotal = r.total ?? r.playlists.length;
+        updatePlaylistPager();
         if (!r.playlists.length) {
           ps.textContent = '没有歌单数据返回';
           return;
         }
-        ps.textContent = `共 ${r.playlists.length} 个歌单（总计 ${r.total}）`;
+        ps.textContent = `本页 ${r.playlists.length} 个 · 第 ${playlistPage}/${Math.max(1, Math.ceil(playlistTotal / PLAYLIST_PAGE_SIZE))} 页 · 总计 ${playlistTotal}`;
         r.playlists.forEach(p => {
           const card = document.createElement('div');
           card.className = 'playlist-card';
@@ -368,6 +402,25 @@
         ps.classList.add('err');
       }
     }
+
+    $('#playlistSort').addEventListener('change', (e) => {
+      playlistSort = e.target.value;
+      playlistPage = 1;
+      renderPlaylists();
+    });
+    $('#playlistPrev').addEventListener('click', () => {
+      if (playlistPage > 1) { playlistPage--; renderPlaylists(); }
+    });
+    $('#playlistNext').addEventListener('click', () => {
+      const totalPages = Math.max(1, Math.ceil(playlistTotal / PLAYLIST_PAGE_SIZE));
+      if (playlistPage < totalPages) { playlistPage++; renderPlaylists(); }
+    });
+    $('#playlistPageInput').addEventListener('change', (e) => {
+      const totalPages = Math.max(1, Math.ceil(playlistTotal / PLAYLIST_PAGE_SIZE));
+      const p = Math.min(totalPages, Math.max(1, parseInt(e.target.value, 10) || 1));
+      playlistPage = p;
+      renderPlaylists();
+    });
 
     async function openPlaylist(p) {
       switchView('detail');
