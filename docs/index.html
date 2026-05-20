@@ -63,6 +63,27 @@
       color: #fff; border-radius: 4px; font-size: 12px;
       text-align: center;
     }
+    .tabs { display: flex; gap: .25rem; margin-bottom: 1rem; }
+    .tabs button {
+      background: transparent; border: 1px solid #2a2a2a; color: #888;
+      padding: 6px 14px; border-radius: 6px 6px 0 0;
+      cursor: pointer; font-size: 13px; border-bottom: none;
+    }
+    .tabs button.active { background: #1a1a1a; color: #fff; border-color: #444; }
+    .tabs button:disabled { opacity: .4; cursor: not-allowed; }
+    .playlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .playlist-card {
+      background: #111; border: 1px solid #1a1a1a; border-radius: 8px;
+      padding: .75rem; cursor: pointer; transition: background .15s, border-color .15s;
+    }
+    .playlist-card:hover { background: #181818; border-color: #333; }
+    .playlist-card .cover { width: 100%; aspect-ratio: 1/1; background: #1a1a1a; border-radius: 4px; overflow: hidden; margin-bottom: .5rem; display:flex;align-items:center;justify-content:center; color:#444;font-size:11px; }
+    .playlist-card .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .playlist-card h3 { font-size: 13px; margin: 0 0 .15rem; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .playlist-card .sub { font-size: 11px; color: #888; }
+    .playlist-card .desc { font-size: 11px; color: #666; margin-top: .25rem; max-height: 2.4em; overflow: hidden; }
+    .back-link { color: #7aa3ff; cursor: pointer; font-size: 12px; margin-bottom: .5rem; display: inline-block; }
+    .back-link:hover { text-decoration: underline; }
     .footer {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: #111; border-top: 1px solid #222;
@@ -90,9 +111,14 @@
 
     <div class="config-note">⚠️ 本连接器需要 <code>accessToken</code> 或 <code>tokenUrl</code> 才能搜索。本演示页未配置，搜索会失败。<br>在 DancingMusic 中添加时填写你的 Spotify token 端点。</div>
 
-    <input id="q" type="search" placeholder="搜索..." value="Imagine Dragons" autofocus>
+    <div class="tabs">
+      <button id="tabTracks" class="active">🎵 搜索曲目</button>
+      <button id="tabPlaylists">📂 歌单</button>
+    </div>
 
-    <div id="status" class="status">加载中…</div>
+    <div id="viewTracks">
+      <input id="q" type="search" placeholder="搜索..." value="Imagine Dragons" autofocus>
+      <div id="status" class="status">加载中…</div>
 
     <div class="pager" id="pagerTop">
       <button id="prevBtn" disabled>← 上一页</button>
@@ -128,6 +154,36 @@
       <summary>关于这些字段</summary>
       <p>所有列直接对应 <code>MusicTrack</code> 接口（<code>@dancingmusic/music-store</code>）。<code>coverUrl</code> 只展示链接以节约带宽；<code>price</code>/<code>currency</code>/<code>version</code>/<code>createdAt</code>/<code>updatedAt</code> 由连接器实现自填，含义因数据源而异（多数公开 API 不返回价格信息所以是 0/默认值）。点击 ▶ 会调用 <code>getStreamUrl(id)</code> 并把返回的 URL 显示在底部播放器条上方。</p>
     </details>
+    </div>
+
+    <div id="viewPlaylists" style="display:none;">
+      <div id="playlistStatus" class="status">加载歌单…</div>
+      <div id="playlistGrid" class="playlist-grid"></div>
+    </div>
+
+    <div id="viewPlaylistDetail" style="display:none;">
+      <a class="back-link" id="backToPlaylists">← 返回歌单列表</a>
+      <h2 id="playlistName" style="font-size:1.1rem;margin:0 0 .25rem;">…</h2>
+      <p id="playlistMeta" class="meta" style="margin-bottom:.5rem;"></p>
+      <div id="playlistTracksStatus" class="status">加载曲目…</div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="act-first">action</th>
+              <th class="num">#</th>
+              <th>id</th>
+              <th>title</th>
+              <th>artist</th>
+              <th>album</th>
+              <th>coverUrl</th>
+              <th class="dur">durationSec</th>
+            </tr>
+          </thead>
+          <tbody id="playlistTracksRows"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <div class="footer">
@@ -263,6 +319,114 @@
         status.textContent = '搜索失败: ' + err.message;
         status.classList.add('err');
       }
+    }
+
+    // -------- Playlists view --------
+
+    async function renderPlaylists() {
+      const grid = $('#playlistGrid');
+      const ps = $('#playlistStatus');
+      grid.innerHTML = '';
+      if (typeof connector.listPlaylists !== 'function') {
+        ps.textContent = '本连接器未实现 listPlaylists（meta.capabilities 不含 "playlist"）';
+        ps.classList.add('err');
+        return;
+      }
+      ps.textContent = '加载歌单…';
+      ps.classList.remove('err');
+      try {
+        const r = await connector.listPlaylists();
+        if (!r.playlists.length) {
+          ps.textContent = '没有歌单数据返回';
+          return;
+        }
+        ps.textContent = `共 ${r.playlists.length} 个歌单（总计 ${r.total}）`;
+        r.playlists.forEach(p => {
+          const card = document.createElement('div');
+          card.className = 'playlist-card';
+          const cover = p.coverUrl
+            ? `<img src="${esc(p.coverUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.textContent='no cover'">`
+            : 'no cover';
+          card.innerHTML = `
+            <div class="cover">${cover}</div>
+            <h3 title="${esc(p.name)}">${esc(p.name)}</h3>
+            <div class="sub">${esc(p.trackCount ?? '?')} 首 · ${esc(p.curator || '—')}</div>
+            ${p.description ? `<div class="desc">${esc(p.description)}</div>` : ''}
+          `;
+          card.addEventListener('click', () => openPlaylist(p));
+          grid.appendChild(card);
+        });
+      } catch (e) {
+        ps.textContent = '加载失败: ' + e.message;
+        ps.classList.add('err');
+      }
+    }
+
+    async function openPlaylist(p) {
+      switchView('detail');
+      $('#playlistName').textContent = p.name;
+      $('#playlistMeta').innerHTML = `
+        id: <code>${esc(p.id)}</code> ·
+        ${p.trackCount ?? '?'} 首 ·
+        ${p.curator ? `curator: ${esc(p.curator)} ·` : ''}
+        ${p.externalUrl ? `<a class="link" target="_blank" href="${esc(p.externalUrl)}">原站 →</a>` : ''}
+      `;
+      const rows = $('#playlistTracksRows');
+      const st = $('#playlistTracksStatus');
+      rows.innerHTML = '';
+      if (typeof connector.getPlaylistTracks !== 'function') {
+        st.textContent = '本连接器未实现 getPlaylistTracks';
+        st.classList.add('err');
+        return;
+      }
+      st.textContent = '加载曲目…';
+      st.classList.remove('err');
+      try {
+        const r = await connector.getPlaylistTracks(p.id, { pageSize: 50 });
+        if (!r.tracks.length) {
+          st.textContent = '歌单为空（或上游 API 没返回 songs）';
+          return;
+        }
+        st.textContent = `共 ${r.tracks.length} 首`;
+        r.tracks.forEach((t, i) => {
+          const tr = document.createElement('tr');
+          const coverCell = t.coverUrl
+            ? `<a class="link" href="${esc(t.coverUrl)}" target="_blank">${esc(trunc(t.coverUrl, 36))}</a>`
+            : '<span style="color:#444">—</span>';
+          tr.innerHTML = `
+            <td class="act-first"><button class="play-btn">▶ play</button></td>
+            <td class="num">${i + 1}</td>
+            <td class="id" title="${esc(t.id)}">${esc(t.id)}</td>
+            <td class="title">${esc(t.title)}</td>
+            <td class="artist">${esc(t.artist || '')}</td>
+            <td class="album">${esc(t.album || '')}</td>
+            <td class="cover">${coverCell}</td>
+            <td class="dur">${esc(t.durationSec ?? 0)} <span style="color:#444">(${fmt(t.durationSec)})</span></td>
+          `;
+          tr.querySelector('.play-btn').addEventListener('click', () => play(t, tr));
+          rows.appendChild(tr);
+        });
+      } catch (e) {
+        st.textContent = '加载失败: ' + e.message;
+        st.classList.add('err');
+      }
+    }
+
+    function switchView(name) {
+      $('#viewTracks').style.display = name === 'tracks' ? '' : 'none';
+      $('#viewPlaylists').style.display = name === 'playlists' ? '' : 'none';
+      $('#viewPlaylistDetail').style.display = name === 'detail' ? '' : 'none';
+      $('#tabTracks').classList.toggle('active', name === 'tracks');
+      $('#tabPlaylists').classList.toggle('active', name === 'playlists' || name === 'detail');
+    }
+    $('#tabTracks').addEventListener('click', () => switchView('tracks'));
+    $('#tabPlaylists').addEventListener('click', () => { switchView('playlists'); renderPlaylists(); });
+    $('#backToPlaylists').addEventListener('click', () => switchView('playlists'));
+
+    // Hide the playlist tab when connector doesn't support it
+    if (!connector.meta.capabilities?.includes('playlist')) {
+      $('#tabPlaylists').disabled = true;
+      $('#tabPlaylists').title = '本连接器未实现 playlist 能力';
     }
 
     let debounceTimer;
