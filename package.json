@@ -1,6 +1,6 @@
 {
   "name": "@dancingmusic/music-connect-spotify",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Spotify connector for DancingMusic. Uses the official Spotify Web API (search + 30s preview URLs). Requires an access token.",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --clean --target es2020 --no-splitting",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "vitest run --reporter=verbose"
   },
   "keywords": [
     "dancingmusic",
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@dancingmusic/music-store": "file:/Users/wuguangliang/workspace/DancingMusicWorkspace/DancingMusic/.claude/worktrees/elastic-bhabha-ada1fe/submodules/MusicStore",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
   }
 }

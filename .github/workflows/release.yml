@@ -1,19 +1,19 @@
 name: Release
 
-# Triggered on every push to main. If package.json's version field doesn't
-# yet have a matching `vX.Y.Z` git tag, this workflow creates the tag and a
-# matching GitHub Release with dist/index.js attached.
+# Triggered on every push to main:
+#   1. install deps + run tests (must pass)
+#   2. verify dist/index.js is committed and matches a fresh build
+#   3. if package.json's version isn't yet tagged, create the tag + GitHub
+#      Release with dist/index.js attached
 #
-# Workflow ON the developer:
-#   1. edit code
-#   2. `npm version patch|minor|major --no-git-tag-version` to bump
-#   3. `npm run build` so dist/index.js is fresh
-#   4. commit (incl. dist/) + push to main
-#   5. this workflow tags + releases automatically
-#
-# The host app (DancingMusic) pins each connector to a specific tag via
-# `cdn.jsdelivr.net/gh/.../<connector>@vX.Y.Z/dist/index.js`, so a stray
-# push to main never breaks already-released versions.
+# Developer flow:
+#   1. edit src/
+#   2. write/update tests under src/__tests__/
+#   3. npm test (locally) until green
+#   4. npm version patch|minor|major --no-git-tag-version
+#   5. npm run build  (refreshes dist/)
+#   6. commit (incl. dist/) + push to main
+#   7. CI runs the same tests + tags + releases
 
 on:
   push:
@@ -33,6 +33,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Test
+        run: npm test --silent
+
+      - name: Verify dist/index.js exists and is up-to-date
+        run: |
+          if [ ! -f dist/index.js ]; then
+            echo "::error::dist/index.js missing — run 'npm run build' locally before pushing"
+            exit 1
+          fi
 
       - name: Read package.json version
         id: pkg
@@ -47,14 +61,6 @@ jobs:
             echo "Tag $tag already exists; skipping release."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Verify dist/index.js exists
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          if [ ! -f dist/index.js ]; then
-            echo "::error::dist/index.js missing — did you forget 'npm run build'?"
-            exit 1
           fi
 
       - name: Create tag and GitHub Release
