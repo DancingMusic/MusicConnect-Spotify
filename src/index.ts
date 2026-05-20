@@ -113,7 +113,7 @@ export class SpotifyConnector implements MusicConnector {
     id: "spotify",
     name: "Spotify",
     description: "Spotify Web API — search + 30s previews",
-    version: "0.3.0",
+    version: "0.2.0",
     capabilities: ["search", "stream", "playlist"],
     configSchema: [
       {
