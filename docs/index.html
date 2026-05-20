@@ -193,10 +193,17 @@
   </div>
 
   <script type="module">
-    // Loaded from the same jsdelivr URL that DancingMusic uses, so this demo
-    // exercises the exact bundle users will get. Relative `../dist/index.js`
-    // wouldn't work because GitHub Pages only publishes /docs.
-    import Connector from 'https://cdn.jsdelivr.net/gh/DancingMusic/MusicConnect-Spotify@main/dist/index.js';
+    // Load the bundle fresh on every page open. jsdelivr caches `@main`
+    // for up to 7 days, which means after a push the demo page would
+    // keep showing the OLD bundle for a week — so we append a per-load
+    // query string to defeat the CDN cache. The host app (DancingMusic)
+    // doesn't need this trick because it pins specific @vX.Y.Z URLs,
+    // which jsdelivr caches as immutable.
+    //
+    // Relative `../dist/index.js` doesn't work — GitHub Pages publishes
+    // only /docs, so the dist isn't reachable from the page.
+    const BUNDLE_URL = `https://cdn.jsdelivr.net/gh/DancingMusic/MusicConnect-Spotify@main/dist/index.js?_=${Date.now()}`;
+    const Connector = (await import(BUNDLE_URL)).default;
 
     const DEFAULT_CONFIG = {};
     const FALLBACK = null;
