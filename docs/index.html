@@ -25,12 +25,13 @@
     }
     input[type=search]:focus { border-color: #5a5a5a; }
     .table-scroll { overflow-x: auto; margin-top: 1rem; border: 1px solid #1a1a1a; border-radius: 6px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1100px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1180px; }
     th, td { padding: .45rem .55rem; text-align: left; border-bottom: 1px solid #1a1a1a; white-space: nowrap; }
     th { color: #777; font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; background: #0f0f0f; position: sticky; top: 0; }
     tbody tr { transition: background .12s; }
     tbody tr:hover { background: #141414; }
     td.num { color: #555; width: 32px; }
+    td.act-first { width: 80px; }
     td.id, td.cover, td.createdAt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8aa3c5; font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
     td.title { color: #fff; }
     td.artist, td.album { color: #888; }
@@ -38,7 +39,6 @@
     td.price { color: #b5d488; font-variant-numeric: tabular-nums; }
     td.currency { color: #aaa; }
     td.version { color: #777; }
-    td.act { text-align: right; }
     a.link { color: #7aa3ff; text-decoration: none; }
     a.link:hover { text-decoration: underline; }
     .play-btn {
@@ -49,6 +49,20 @@
     .play-btn.playing { color: #4ade80; border-color: #4ade80; }
     .status { color: #666; font-size: 12px; padding: .5rem 0; }
     .status.err { color: #ff8a8a; }
+    .pager { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; font-size: 12px; color: #888; }
+    .pager button {
+      background: transparent; border: 1px solid #2a2a2a; color: #ccc;
+      padding: 3px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    .pager button:hover:not(:disabled) { background: #1a1a1a; border-color: #444; }
+    .pager button:disabled { opacity: .35; cursor: not-allowed; }
+    .pager .info { color: #666; }
+    .pager input[type="number"] {
+      width: 60px; padding: 3px 6px;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      color: #fff; border-radius: 4px; font-size: 12px;
+      text-align: center;
+    }
     .footer {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: #111; border-top: 1px solid #222;
@@ -80,10 +94,18 @@
 
     <div id="status" class="status">加载中…</div>
 
+    <div class="pager" id="pagerTop">
+      <button id="prevBtn" disabled>← 上一页</button>
+      <span class="info">第 <input id="pageInput" type="number" min="1" value="1"> / <span id="totalPages">1</span> 页</span>
+      <button id="nextBtn" disabled>下一页 →</button>
+      <span class="info">每页 30 条 · 总计 <span id="totalCount">0</span></span>
+    </div>
+
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
+            <th class="act-first">action</th>
             <th class="num">#</th>
             <th>id</th>
             <th>title</th>
@@ -96,7 +118,6 @@
             <th>version</th>
             <th>createdAt</th>
             <th>updatedAt</th>
-            <th class="act">action</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -183,11 +204,29 @@
       try { await player.play(); } catch (_) { /* user gesture rules */ }
     }
 
-    async function run(keyword) {
-      status.textContent = `搜索 "${keyword}" …`;
+    const PAGE_SIZE = 30;
+    let currentKeyword = '';
+    let currentPage = 1;
+    let lastTotal = 0;
+
+    function updatePager() {
+      const totalPages = Math.max(1, Math.ceil(lastTotal / PAGE_SIZE));
+      $('#totalPages').textContent = totalPages;
+      $('#totalCount').textContent = lastTotal;
+      $('#pageInput').value = currentPage;
+      $('#pageInput').max = totalPages;
+      $('#prevBtn').disabled = currentPage <= 1;
+      $('#nextBtn').disabled = currentPage >= totalPages;
+    }
+
+    async function run(keyword, page = 1) {
+      currentKeyword = keyword;
+      currentPage = page;
+      status.textContent = `搜索 "${keyword}" (page ${page}) …`;
       status.classList.remove('err');
       try {
-        const r = await connector.search({ keyword, pageSize: 30 });
+        const r = await connector.search({ keyword, page, pageSize: PAGE_SIZE });
+        lastTotal = r.total ?? r.tracks.length;
         rowsEl.innerHTML = '';
         r.tracks.forEach((t, i) => {
           const tr = document.createElement('tr');
@@ -196,8 +235,10 @@
             : '<span style="color:#444">—</span>';
           const createdCell = t.createdAt ? esc(trunc(t.createdAt, 20)) : '<span style="color:#444">—</span>';
           const updatedCell = t.updatedAt ? esc(trunc(t.updatedAt, 20)) : '<span style="color:#444">—</span>';
+          const globalIdx = (page - 1) * PAGE_SIZE + i + 1;
           tr.innerHTML = `
-            <td class="num">${i + 1}</td>
+            <td class="act-first"><button class="play-btn">▶ play</button></td>
+            <td class="num">${globalIdx}</td>
             <td class="id" title="${esc(t.id)}">${esc(t.id)}</td>
             <td class="title">${esc(t.title)}</td>
             <td class="artist">${esc(t.artist || '')}</td>
@@ -209,14 +250,16 @@
             <td class="version">${esc(t.version || '')}</td>
             <td class="createdAt">${createdCell}</td>
             <td class="createdAt">${updatedCell}</td>
-            <td class="act"><button class="play-btn">▶ play</button></td>
           `;
           tr.querySelector('.play-btn').addEventListener('click', () => play(t, tr));
           rowsEl.appendChild(tr);
         });
-        status.textContent = `共 ${r.tracks.length} 条结果（总计 ${r.total}）— 滚动表格可看全部字段`;
+        updatePager();
+        status.textContent = `本页 ${r.tracks.length} 条 · 第 ${page}/${Math.max(1, Math.ceil(lastTotal / PAGE_SIZE))} 页 · 总计 ${lastTotal}`;
       } catch (err) {
         rowsEl.innerHTML = '';
+        lastTotal = 0;
+        updatePager();
         status.textContent = '搜索失败: ' + err.message;
         status.classList.add('err');
       }
@@ -225,10 +268,22 @@
     let debounceTimer;
     $('#q').addEventListener('input', (e) => {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => run(e.target.value.trim()), 300);
+      debounceTimer = setTimeout(() => run(e.target.value.trim(), 1), 300);
+    });
+    $('#prevBtn').addEventListener('click', () => {
+      if (currentPage > 1) run(currentKeyword, currentPage - 1);
+    });
+    $('#nextBtn').addEventListener('click', () => {
+      const totalPages = Math.max(1, Math.ceil(lastTotal / PAGE_SIZE));
+      if (currentPage < totalPages) run(currentKeyword, currentPage + 1);
+    });
+    $('#pageInput').addEventListener('change', (e) => {
+      const totalPages = Math.max(1, Math.ceil(lastTotal / PAGE_SIZE));
+      const p = Math.min(totalPages, Math.max(1, parseInt(e.target.value, 10) || 1));
+      run(currentKeyword, p);
     });
 
-    run($('#q').value.trim());
+    run($('#q').value.trim(), 1);
   </script>
 </body>
 </html>
