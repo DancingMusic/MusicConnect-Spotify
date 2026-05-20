@@ -52,13 +52,21 @@ jobs:
         id: pkg
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Tag already exists?
+      - name: Release already exists?
         id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           tag="v${{ steps.pkg.outputs.version }}"
-          if git rev-parse "$tag" >/dev/null 2>&1; then
+          # Treat the version as already released if EITHER the git tag exists
+          # OR a GitHub Release exists. Either way we have nothing to do.
+          tag_exists=false
+          rel_exists=false
+          git rev-parse "$tag" >/dev/null 2>&1 && tag_exists=true
+          gh release view "$tag" >/dev/null 2>&1 && rel_exists=true
+          if [ "$tag_exists" = true ] || [ "$rel_exists" = true ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $tag already exists; skipping release."
+            echo "Already released (tag=$tag_exists release=$rel_exists); skipping."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
