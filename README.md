@@ -2,6 +2,8 @@
 
 Spotify connector for [DancingMusic](https://github.com/DancingMusic/DancingMusic).
 
+🔗 **Live demo:** [https://dancingmusic.github.io/MusicConnect-Spotify/](https://dancingmusic.github.io/MusicConnect-Spotify/) — search + play table built from this connector's own `dist/index.js`.
+
 Uses the official [Spotify Web API](https://developer.spotify.com/documentation/web-api) for search + track metadata. Returns the 30-second `preview_url` field every search result carries — **full-length playback requires Spotify Premium + the [Web Playback SDK](https://developer.spotify.com/documentation/web-playback-sdk)** which has to be embedded by the host app with user OAuth scopes (this connector deliberately stops at the preview boundary).
 
 ## Setup
