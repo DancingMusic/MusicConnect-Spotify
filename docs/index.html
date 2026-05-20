@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spotify · MusicConnect</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: #0a0a0a; color: #e4e4e4;
+      margin: 0; padding: 2rem 1.25rem 6rem;
+      max-width: 1000px; margin-left: auto; margin-right: auto;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    p.desc { color: #888; margin: 0 0 1rem; }
+    .meta { font-size: 12px; color: #666; margin-bottom: 1.25rem; }
+    .meta code { background: #1a1a1a; padding: 1px 6px; border-radius: 4px; color: #ccc; }
+    .config-note { background: #2a1a1a; border: 1px solid #5a2a2a; padding: .75rem 1rem; border-radius: 8px; color: #ffba8a; font-size: 13px; margin-bottom: 1rem; }
+    input[type=search] {
+      width: 100%; padding: .5rem .9rem;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      color: #fff; border-radius: 8px; font-size: 14px;
+      outline: none;
+    }
+    input[type=search]:focus { border-color: #5a5a5a; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 13px; }
+    th, td { padding: .5rem .6rem; text-align: left; border-bottom: 1px solid #1a1a1a; }
+    th { color: #777; font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+    tbody tr { transition: background .12s; }
+    tbody tr:hover { background: #141414; }
+    td.num { color: #555; width: 32px; }
+    td.title { color: #fff; }
+    td.artist, td.album { color: #888; }
+    td.dur { color: #666; text-align: right; font-variant-numeric: tabular-nums; width: 60px; }
+    td.act { text-align: right; width: 60px; }
+    .play-btn {
+      background: transparent; border: 1px solid #333; color: #ccc;
+      padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    .play-btn:hover { background: #1a1a1a; border-color: #555; }
+    .play-btn.playing { color: #4ade80; border-color: #4ade80; }
+    .status { color: #666; font-size: 12px; padding: .5rem 0; }
+    .status.err { color: #ff8a8a; }
+    .footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #111; border-top: 1px solid #222;
+      padding: .5rem 1rem;
+    }
+    .footer audio { width: 100%; max-width: 900px; margin: 0 auto; display: block; }
+    .now { font-size: 12px; color: #888; text-align: center; margin-bottom: .25rem; }
+  </style>
+</head>
+<body>
+  <h1>Spotify</h1>
+  <p class="desc">Spotify Web API — 搜索 + 30 秒预览</p>
+  <p class="meta">
+    数据源仓库: <code>DancingMusic/MusicConnect-Spotify</code> ·
+    版本: <code id="version">loading…</code> ·
+    ID 前缀: <code>spotify:</code> ·
+    <a href="https://github.com/DancingMusic/MusicConnect-Spotify" style="color:#7aa3ff">GitHub →</a>
+  </p>
+
+  <div class="config-note">⚠️ 本连接器需要 <code>accessToken</code> 或 <code>tokenUrl</code> 才能搜索。本演示页未配置，搜索会失败。<br>在 DancingMusic 中添加时填写你的 Spotify token 端点。</div>
+
+  <input id="q" type="search" placeholder="搜索..." value="Imagine Dragons" autofocus>
+
+  <div id="status" class="status">加载中…</div>
+
+  <table>
+    <thead>
+      <tr><th class="num">#</th><th>标题</th><th>艺人</th><th>专辑</th><th class="dur">时长</th><th></th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="footer">
+    <div class="now" id="nowPlaying">未播放</div>
+    <audio id="player" controls></audio>
+  </div>
+
+  <script type="module">
+    // The page loads the same dist/index.js that the host app uses, so what
+    // you see here is exactly what users will see in DancingMusic.
+    import Connector from '../dist/index.js';
+
+    const DEFAULT_CONFIG = {};
+    const FALLBACK = null;
+
+    const $ = (sel) => document.querySelector(sel);
+    const status = $('#status');
+    const rowsEl = $('#rows');
+    const player = $('#player');
+    const now = $('#nowPlaying');
+
+    let connector;
+    try {
+      connector = new Connector();
+      await connector.init?.(DEFAULT_CONFIG);
+      $('#version').textContent = connector.meta.version;
+    } catch (err) {
+      status.textContent = '连接器初始化失败: ' + err.message;
+      status.classList.add('err');
+      throw err;
+    }
+
+    function fmt(s) {
+      if (!s) return '';
+      const m = Math.floor(s / 60), r = s % 60;
+      return `${m}:${String(r).padStart(2, '0')}`;
+    }
+
+    let activeRow = null;
+    async function play(track, row) {
+      if (activeRow) activeRow.querySelector('.play-btn').classList.remove('playing');
+      row.querySelector('.play-btn').classList.add('playing');
+      activeRow = row;
+      now.textContent = `${track.title} — ${track.artist || ''}`;
+      let url = null;
+      try {
+        const info = await connector.getStreamUrl(track.id);
+        if (info?.url) url = info.url;
+      } catch (e) { /* try fallback */ }
+      if (!url && FALLBACK) url = FALLBACK(track.id);
+      if (!url) {
+        now.textContent = `${track.title} — 无可用流（VIP / 需登录）`;
+        return;
+      }
+      player.src = url;
+      try { await player.play(); } catch (_) { /* user gesture rules */ }
+    }
+
+    async function run(keyword) {
+      status.textContent = `搜索 "${keyword}" …`;
+      status.classList.remove('err');
+      try {
+        const r = await connector.search({ keyword, pageSize: 30 });
+        rowsEl.innerHTML = '';
+        r.tracks.forEach((t, i) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="num">${i + 1}</td>
+            <td class="title"></td>
+            <td class="artist"></td>
+            <td class="album"></td>
+            <td class="dur">${fmt(t.durationSec)}</td>
+            <td class="act"><button class="play-btn">▶</button></td>
+          `;
+          tr.querySelector('.title').textContent = t.title;
+          tr.querySelector('.artist').textContent = t.artist || '';
+          tr.querySelector('.album').textContent = t.album || '';
+          tr.querySelector('.play-btn').addEventListener('click', () => play(t, tr));
+          rowsEl.appendChild(tr);
+        });
+        status.textContent = `共 ${r.tracks.length} 条结果（总计 ${r.total}）`;
+      } catch (err) {
+        rowsEl.innerHTML = '';
+        status.textContent = '搜索失败: ' + err.message;
+        status.classList.add('err');
+      }
+    }
+
+    let debounceTimer;
+    $('#q').addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => run(e.target.value.trim()), 300);
+    });
+
+    run($('#q').value.trim());
+  </script>
+</body>
+</html>
