@@ -217,8 +217,9 @@ export class SpotifyConnector implements MusicConnector {
     const page = query.page ?? 1;
     const pageSize = Math.min(query.pageSize ?? 30, 50);
     const offset = (page - 1) * pageSize;
-    // category = a Spotify category id like "toplists" / "pop" / "rock"
-    // omitting → use featured-playlists (global editorial picks)
+    // Spotify has no sort parameter for /browse/*-playlists. We ignore
+    // `query.sort` and always return editorial picks. (Documenting this
+    // in the README — connectors must report sort fidelity.)
     const url = query.category
       ? `${API}/browse/categories/${encodeURIComponent(query.category)}/playlists?limit=${pageSize}&offset=${offset}`
       : `${API}/browse/featured-playlists?limit=${pageSize}&offset=${offset}`;
