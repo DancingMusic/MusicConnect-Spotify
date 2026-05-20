@@ -1,0 +1,72 @@
+name: Release
+
+# Triggered on every push to main. If package.json's version field doesn't
+# yet have a matching `vX.Y.Z` git tag, this workflow creates the tag and a
+# matching GitHub Release with dist/index.js attached.
+#
+# Workflow ON the developer:
+#   1. edit code
+#   2. `npm version patch|minor|major --no-git-tag-version` to bump
+#   3. `npm run build` so dist/index.js is fresh
+#   4. commit (incl. dist/) + push to main
+#   5. this workflow tags + releases automatically
+#
+# The host app (DancingMusic) pins each connector to a specific tag via
+# `cdn.jsdelivr.net/gh/.../<connector>@vX.Y.Z/dist/index.js`, so a stray
+# push to main never breaks already-released versions.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Read package.json version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Tag already exists?
+        id: check
+        run: |
+          tag="v${{ steps.pkg.outputs.version }}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $tag already exists; skipping release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify dist/index.js exists
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          if [ ! -f dist/index.js ]; then
+            echo "::error::dist/index.js missing — did you forget 'npm run build'?"
+            exit 1
+          fi
+
+      - name: Create tag and GitHub Release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.pkg.outputs.version }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" dist/index.js \
+            --title "$tag" \
+            --notes "Auto-released from \`${GITHUB_SHA::7}\`. Pin via cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@${tag}/dist/index.js"
