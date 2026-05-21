@@ -25,13 +25,14 @@
     }
     input[type=search]:focus { border-color: #5a5a5a; }
     .table-scroll { overflow-x: auto; margin-top: 1rem; border: 1px solid #1a1a1a; border-radius: 6px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1180px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1280px; }
     th, td { padding: .45rem .55rem; text-align: left; border-bottom: 1px solid #1a1a1a; white-space: nowrap; }
     th { color: #777; font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; background: #0f0f0f; position: sticky; top: 0; }
     tbody tr { transition: background .12s; }
     tbody tr:hover { background: #141414; }
     td.num { color: #555; width: 32px; }
     td.act-first { width: 80px; }
+    td.act-lyrics { width: 90px; }
     td.id, td.cover, td.createdAt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8aa3c5; font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
     td.title { color: #fff; }
     td.artist, td.album { color: #888; }
@@ -41,12 +42,14 @@
     td.version { color: #777; }
     a.link { color: #7aa3ff; text-decoration: none; }
     a.link:hover { text-decoration: underline; }
-    .play-btn {
+    .play-btn, .lyrics-btn {
       background: transparent; border: 1px solid #333; color: #ccc;
       padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
     }
-    .play-btn:hover { background: #1a1a1a; border-color: #555; }
+    .play-btn:hover, .lyrics-btn:hover:not(:disabled) { background: #1a1a1a; border-color: #555; }
     .play-btn.playing { color: #4ade80; border-color: #4ade80; }
+    .lyrics-btn { color: #93c5fd; }
+    .lyrics-btn:disabled { color: #555; border-color: #222; cursor: not-allowed; }
     .status { color: #666; font-size: 12px; padding: .5rem 0; }
     .status.err { color: #ff8a8a; }
     .pager { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; font-size: 12px; color: #888; }
@@ -92,6 +95,7 @@
     .footer audio { width: 100%; max-width: 1200px; margin: 0 auto; display: block; }
     .now { font-size: 12px; color: #888; text-align: center; margin-bottom: .25rem; max-width: 1200px; margin-left: auto; margin-right: auto; }
     .stream-info { font-family: ui-monospace, monospace; font-size: 11px; color: #6a8aa8; text-align: center; margin-top: .25rem; word-break: break-all; max-width: 1200px; margin-left: auto; margin-right: auto; }
+    .lyrics-info { font-family: ui-monospace, monospace; font-size: 11px; color: #b6c7d8; text-align: left; white-space: pre-wrap; word-break: break-word; max-width: 1200px; max-height: 8rem; overflow: auto; margin: .35rem auto 0; padding-top: .35rem; border-top: 1px solid #222; }
     details.fields-help { margin-top: 1rem; font-size: 12px; color: #888; }
     details.fields-help summary { cursor: pointer; user-select: none; }
     details.fields-help code { color: #b5d488; }
@@ -132,6 +136,7 @@
         <thead>
           <tr>
             <th class="act-first">action</th>
+            <th class="act-lyrics">lyrics</th>
             <th class="num">#</th>
             <th>id</th>
             <th>title</th>
@@ -152,7 +157,7 @@
 
     <details class="fields-help">
       <summary>关于这些字段</summary>
-      <p>所有列直接对应 <code>MusicTrack</code> 接口（<code>@dancingmusic/music-store</code>）。<code>coverUrl</code> 只展示链接以节约带宽；<code>price</code>/<code>currency</code>/<code>version</code>/<code>createdAt</code>/<code>updatedAt</code> 由连接器实现自填，含义因数据源而异（多数公开 API 不返回价格信息所以是 0/默认值）。点击 ▶ 会调用 <code>getStreamUrl(id)</code> 并把返回的 URL 显示在底部播放器条上方。</p>
+      <p>所有列直接对应 <code>MusicTrack</code> 接口（<code>@dancingmusic/music-store</code>）。<code>coverUrl</code> 只展示链接以节约带宽；<code>price</code>/<code>currency</code>/<code>version</code>/<code>createdAt</code>/<code>updatedAt</code> 由连接器实现自填，含义因数据源而异（多数公开 API 不返回价格信息所以是 0/默认值）。点击 ▶ 会调用 <code>getStreamUrl(id)</code> 并把返回的 URL 显示在底部播放器条上方；点击 lyrics 会调用 <code>getLyrics(id)</code> 并在底部显示歌词预览。</p>
     </details>
     </div>
 
@@ -202,6 +207,7 @@
   <div class="footer">
     <div class="now" id="nowPlaying">未播放</div>
     <div class="stream-info" id="streamInfo"></div>
+    <div class="lyrics-info" id="lyricsInfo"></div>
     <audio id="player" controls></audio>
   </div>
 
@@ -227,6 +233,7 @@
     const player = $('#player');
     const now = $('#nowPlaying');
     const streamInfo = $('#streamInfo');
+    const lyricsInfo = $('#lyricsInfo');
 
     let connector;
     try {
@@ -250,6 +257,49 @@
     }
     function esc(s) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function formatLyricTime(seconds) {
+      if (!Number.isFinite(seconds)) return '--:--';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+    function summarizeLyrics(res) {
+      if (!res) return '未返回歌词';
+      if (Array.isArray(res.timeline) && res.timeline.length) {
+        return res.timeline.slice(0, 12).map(line => {
+          const translated = line.translated ? ' · ' + line.translated : '';
+          return '[' + formatLyricTime(line.time) + '] ' + line.text + translated;
+        }).join('\n');
+      }
+      if (typeof res.text === 'string' && res.text.trim()) {
+        return res.text.trim().split(/\r?\n/).slice(0, 16).join('\n');
+      }
+      return '歌词为空';
+    }
+    async function fetchLyrics(track, row) {
+      if (typeof connector.getLyrics !== 'function') {
+        lyricsInfo.textContent = '本连接器未实现 getLyrics，Pages 演示页无法直接获取歌词。';
+        return;
+      }
+      const btn = row.querySelector('.lyrics-btn');
+      btn.disabled = true;
+      btn.textContent = 'loading';
+      lyricsInfo.textContent = '获取歌词中: ' + track.title + ' — ' + (track.artist || '');
+      try {
+        const res = await connector.getLyrics(track.id);
+        lyricsInfo.textContent = 'lyrics: ' + track.title + ' — ' + (track.artist || '') + '\n' + summarizeLyrics(res);
+      } catch (err) {
+        lyricsInfo.textContent = 'getLyrics(' + track.id + ') 失败: ' + (err.message || err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'lyrics';
+      }
+    }
+    function lyricsButtonHtml() {
+      const supported = typeof connector.getLyrics === 'function';
+      const title = supported ? '调用 getLyrics(id)' : '本连接器未实现 getLyrics';
+      return '<button class="lyrics-btn" ' + (supported ? '' : 'disabled') + ' title="' + title + '">lyrics</button>';
     }
 
     let activeRow = null;
@@ -314,6 +364,7 @@
           const globalIdx = (page - 1) * PAGE_SIZE + i + 1;
           tr.innerHTML = `
             <td class="act-first"><button class="play-btn">▶ play</button></td>
+            <td class="act-lyrics">${lyricsButtonHtml()}</td>
             <td class="num">${globalIdx}</td>
             <td class="id" title="${esc(t.id)}">${esc(t.id)}</td>
             <td class="title">${esc(t.title)}</td>
@@ -328,6 +379,8 @@
             <td class="createdAt">${updatedCell}</td>
           `;
           tr.querySelector('.play-btn').addEventListener('click', () => play(t, tr));
+          const lyricsBtn = tr.querySelector('.lyrics-btn');
+          if (lyricsBtn && !lyricsBtn.disabled) lyricsBtn.addEventListener('click', () => fetchLyrics(t, tr));
           rowsEl.appendChild(tr);
         });
         updatePager();
@@ -455,6 +508,7 @@
             : '<span style="color:#444">—</span>';
           tr.innerHTML = `
             <td class="act-first"><button class="play-btn">▶ play</button></td>
+            <td class="act-lyrics">${lyricsButtonHtml()}</td>
             <td class="num">${i + 1}</td>
             <td class="id" title="${esc(t.id)}">${esc(t.id)}</td>
             <td class="title">${esc(t.title)}</td>
@@ -464,6 +518,8 @@
             <td class="dur">${esc(t.durationSec ?? 0)} <span style="color:#444">(${fmt(t.durationSec)})</span></td>
           `;
           tr.querySelector('.play-btn').addEventListener('click', () => play(t, tr));
+          const lyricsBtn = tr.querySelector('.lyrics-btn');
+          if (lyricsBtn && !lyricsBtn.disabled) lyricsBtn.addEventListener('click', () => fetchLyrics(t, tr));
           rows.appendChild(tr);
         });
       } catch (e) {
