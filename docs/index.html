@@ -95,7 +95,14 @@
     .footer audio { width: 100%; max-width: 1200px; margin: 0 auto; display: block; }
     .now { font-size: 12px; color: #888; text-align: center; margin-bottom: .25rem; max-width: 1200px; margin-left: auto; margin-right: auto; }
     .stream-info { font-family: ui-monospace, monospace; font-size: 11px; color: #6a8aa8; text-align: center; margin-top: .25rem; word-break: break-all; max-width: 1200px; margin-left: auto; margin-right: auto; }
-    .lyrics-info { font-family: ui-monospace, monospace; font-size: 11px; color: #b6c7d8; text-align: left; white-space: pre-wrap; word-break: break-word; max-width: 1200px; max-height: 8rem; overflow: auto; margin: .35rem auto 0; padding-top: .35rem; border-top: 1px solid #222; }
+    .lyrics-modal[hidden] { display: none; }
+    .lyrics-modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .lyrics-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .72); }
+    .lyrics-dialog { position: relative; width: min(720px, 100%); max-height: min(78vh, 640px); background: #111; border: 1px solid #333; border-radius: 10px; box-shadow: 0 16px 60px rgba(0, 0, 0, .45); display: flex; flex-direction: column; overflow: hidden; }
+    .lyrics-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid #222; color: #fff; }
+    .lyrics-head button { border: 1px solid #333; background: #1a1a1a; color: #ddd; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+    .lyrics-head button:hover { background: #242424; color: #fff; }
+    .lyrics-body { margin: 0; padding: 1rem; overflow: auto; color: #c9d7e3; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
     details.fields-help { margin-top: 1rem; font-size: 12px; color: #888; }
     details.fields-help summary { cursor: pointer; user-select: none; }
     details.fields-help code { color: #b5d488; }
@@ -157,7 +164,7 @@
 
     <details class="fields-help">
       <summary>关于这些字段</summary>
-      <p>所有列直接对应 <code>MusicTrack</code> 接口（<code>@dancingmusic/music-store</code>）。<code>coverUrl</code> 只展示链接以节约带宽；<code>price</code>/<code>currency</code>/<code>version</code>/<code>createdAt</code>/<code>updatedAt</code> 由连接器实现自填，含义因数据源而异（多数公开 API 不返回价格信息所以是 0/默认值）。点击 ▶ 会调用 <code>getStreamUrl(id)</code> 并把返回的 URL 显示在底部播放器条上方；点击 lyrics 会调用 <code>getLyrics(id)</code> 并在底部显示歌词预览。</p>
+      <p>所有列直接对应 <code>MusicTrack</code> 接口（<code>@dancingmusic/music-store</code>）。<code>coverUrl</code> 只展示链接以节约带宽；<code>price</code>/<code>currency</code>/<code>version</code>/<code>createdAt</code>/<code>updatedAt</code> 由连接器实现自填，含义因数据源而异（多数公开 API 不返回价格信息所以是 0/默认值）。点击 ▶ 会调用 <code>getStreamUrl(id)</code> 并把返回的 URL 显示在底部播放器条上方；点击 lyrics 会调用 <code>getLyrics(id)</code> 并在可滚动弹窗中显示歌词预览。</p>
     </details>
     </div>
 
@@ -207,8 +214,20 @@
   <div class="footer">
     <div class="now" id="nowPlaying">未播放</div>
     <div class="stream-info" id="streamInfo"></div>
-    <div class="lyrics-info" id="lyricsInfo"></div>
     <audio id="player" controls></audio>
+  </div>
+
+
+
+  <div class="lyrics-modal" id="lyricsModal" hidden>
+    <div class="lyrics-backdrop" data-close-lyrics></div>
+    <section class="lyrics-dialog" role="dialog" aria-modal="true" aria-labelledby="lyricsTitle">
+      <div class="lyrics-head">
+        <strong id="lyricsTitle">lyrics</strong>
+        <button id="lyricsClose" type="button" aria-label="关闭歌词弹窗">x</button>
+      </div>
+      <pre class="lyrics-body" id="lyricsBody"></pre>
+    </section>
   </div>
 
   <script type="module">
@@ -233,7 +252,10 @@
     const player = $('#player');
     const now = $('#nowPlaying');
     const streamInfo = $('#streamInfo');
-    const lyricsInfo = $('#lyricsInfo');
+    const lyricsModal = $('#lyricsModal');
+    const lyricsTitle = $('#lyricsTitle');
+    const lyricsBody = $('#lyricsBody');
+    const lyricsClose = $('#lyricsClose');
 
     let connector;
     try {
@@ -245,6 +267,23 @@
       status.classList.add('err');
       throw err;
     }
+
+    function showLyricsModal(title, body) {
+      lyricsTitle.textContent = title;
+      lyricsBody.textContent = body;
+      lyricsModal.hidden = false;
+      lyricsClose.focus();
+    }
+    function closeLyricsModal() {
+      lyricsModal.hidden = true;
+    }
+    lyricsClose.addEventListener('click', closeLyricsModal);
+    lyricsModal.addEventListener('click', (event) => {
+      if (event.target?.hasAttribute?.('data-close-lyrics')) closeLyricsModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !lyricsModal.hidden) closeLyricsModal();
+    });
 
     function fmt(s) {
       if (!s) return '0';
@@ -278,19 +317,20 @@
       return '歌词为空';
     }
     async function fetchLyrics(track, row) {
+      const title = 'lyrics: ' + track.title + (track.artist ? ' — ' + track.artist : '');
       if (typeof connector.getLyrics !== 'function') {
-        lyricsInfo.textContent = '本连接器未实现 getLyrics，Pages 演示页无法直接获取歌词。';
+        showLyricsModal('歌词不可用', '本连接器未实现 getLyrics，Pages 演示页无法直接获取歌词。');
         return;
       }
       const btn = row.querySelector('.lyrics-btn');
       btn.disabled = true;
       btn.textContent = 'loading';
-      lyricsInfo.textContent = '获取歌词中: ' + track.title + ' — ' + (track.artist || '');
+      showLyricsModal(title, '获取歌词中...');
       try {
         const res = await connector.getLyrics(track.id);
-        lyricsInfo.textContent = 'lyrics: ' + track.title + ' — ' + (track.artist || '') + '\n' + summarizeLyrics(res);
+        showLyricsModal(title, summarizeLyrics(res));
       } catch (err) {
-        lyricsInfo.textContent = 'getLyrics(' + track.id + ') 失败: ' + (err.message || err);
+        showLyricsModal(title, 'getLyrics(' + track.id + ') 失败: ' + (err.message || err));
       } finally {
         btn.disabled = false;
         btn.textContent = 'lyrics';
